@@ -1,165 +1,157 @@
-try:
-    import PySimpleGUI4 as sg
-    _PYSIMPLEGUI_IMPORT_ERROR = None
-except Exception as _err:
-    sg = None
-    _PYSIMPLEGUI_IMPORT_ERROR = _err
-
-# Cast the module to Any for static type checkers so attribute access (Text, Window, etc.)
-# doesn't generate false-positive errors from static analyzers that don't know PySimpleGUI.
-from typing import Any, cast
-if sg is not None:
-    sg = cast(Any, sg)
+import customtkinter as ctk
+from tkinter import filedialog, messagebox
 import threading
-import io
 import sys
+import os
 from core.file_utils import run_auto_tag_pipeline
+import traceback
+from core import tagger
+from core import file_utils
 
-# ---------------------------------------------------------------------------
-# Redirect stdout/stderr to the GUI console
-# ---------------------------------------------------------------------------
-class StdoutRedirector(io.TextIOBase):
-    def __init__(self, window, key):
-        self.window = window
-        self.key = key
+
+# --- App settings ---
+ctk.set_appearance_mode("dark")
+ctk.set_default_color_theme("blue")
+
+
+class MetadataFixerApp(ctk.CTk):
+
+    def __init__(self):
+        super().__init__()
+
+        self.title("Metadata Fixer")
+        self.geometry("700x480")
+        self.resizable(False, False)
+
+        # --- Header ---
+        header = ctk.CTkLabel(self, text="🎵 Music Metadata Fixer", font=("Segoe UI", 20, "bold"))
+        header.pack(pady=(20, 10))
+
+        # --- Source folder field ---
+        frame_path = ctk.CTkFrame(self)
+        frame_path.pack(padx=20, pady=(10, 10), fill="x")
+
+        ctk.CTkLabel(frame_path, text="Source Folder:").pack(side="left", padx=(10, 5), pady=10)
+        self.entry_path = ctk.CTkEntry(frame_path)
+        self.entry_path.pack(side="left", expand=True, fill="x", padx=(0, 5), pady=10)
+
+        self.button_browse = ctk.CTkButton(frame_path, text="Browse", width=100, command=self.browse_folder)
+        self.button_browse.pack(side="right", padx=(5, 10))
+
+        # --- Start & Exit buttons ---
+        button_frame = ctk.CTkFrame(self, fg_color="transparent")
+        button_frame.pack(pady=(5, 10))
+
+        self.button_start = ctk.CTkButton(button_frame, text="Start", width=100, command=self.start_tagging)
+        self.button_start.pack(side="left", padx=10)
+
+        self.button_exit = ctk.CTkButton(button_frame, text="Exit", width=100, command=self.quit)
+        self.button_exit.pack(side="left", padx=10)
+
+        # --- Progress bar ---
+        self.progress = ctk.CTkProgressBar(self, width=640)
+        self.progress.pack(pady=(10, 15))
+        self.progress.set(0)
+
+        # --- Log output ---
+        self.text_log = ctk.CTkTextbox(self, width=660, height=260)
+        self.text_log.pack(padx=20, pady=(0, 10))
+        self.log("✅ Ready to start.\n")
+
+    # -----------------------------------------------------------------------
+    # Handlers
+    # -----------------------------------------------------------------------
+    def browse_folder(self):
+        folder = filedialog.askdirectory(title="Select your music folder")
+        if folder:
+            self.entry_path.delete(0, "end")
+            self.entry_path.insert(0, folder)
+            self.log(f"Selected folder: {folder}\n")
+
+    def start_tagging(self):
+        folder = self.entry_path.get().strip()
+        if not folder or not os.path.exists(folder):
+            messagebox.showerror("Error", "Please select a valid folder first.")
+            return
+
+        # --- Pre-check: see if all files are already tagged ---
+        try:
+            from core import tagger
+            mp3_files = file_utils.find_mp3_files(folder)
+            if not mp3_files:
+                messagebox.showinfo("No MP3 Files", "No MP3 files were found in this folder.")
+                self.log("ℹ️ No MP3 files found in this folder.\n")
+                return
+
+            already_tagged = [f for f in mp3_files if tagger.is_already_tagged(f)]
+            if len(already_tagged) == len(mp3_files):
+                messagebox.showinfo(
+                    "All Files Tagged",
+                    f"🎶 All {len(mp3_files)} MP3 files in this folder are already tagged!"
+                )
+                self.log(f"ℹ️ All {len(mp3_files)} MP3 files are already tagged. Skipping processing.\n")
+                return
+        except Exception as e:
+            self.log(f"⚠️ Pre-check failed: {e}\n")
+
+        # --- Continue normally ---
+        self.button_start.configure(state="disabled")
+        self.progress.set(0)
+        self.text_log.delete("1.0", "end")
+        self.log(f"🚀 Started tagging pipeline for: {folder}\n")
+
+        threading.Thread(target=self.run_pipeline_thread, args=(folder,), daemon=True).start()
+
+
+    def run_pipeline_thread(self, folder):
+        """Run the tagging pipeline in a background thread."""
+        old_stdout = sys.stdout
+        old_stderr = sys.stderr
+        try:
+            def gui_logger(msg):
+                self.log(msg + "\n")
+
+            # redirect stdout/stderr to GUI
+            sys.stdout = sys.stderr = LogRedirector(gui_logger)
+
+            run_auto_tag_pipeline(folder)
+
+            self.progress.set(1)
+            self.log("✅ Tagging completed successfully.\n")
+
+        except Exception as e:
+            self.log(f"❌ Error: {e}\n{traceback.format_exc()}\n")
+            messagebox.showerror("Error", str(e))
+
+        finally:
+            sys.stdout = old_stdout
+            sys.stderr = old_stderr
+            self.button_start.configure(state="normal")
+
+    def log(self, msg):
+        """Append text to the log box."""
+        self.text_log.insert("end", msg)
+        self.text_log.see("end")
+        self.update_idletasks()
+
+
+class LogRedirector:
+    """Redirects print() output to the GUI log box."""
+    def __init__(self, callback):
+        self.callback = callback
 
     def write(self, data):
-        # Ensure we always work with a string and ignore empty writes
-        try:
-            s = str(data)
-        except Exception:
-            return 0
-
-        if s.strip():
-            # Send the text as an event value so the main thread can append it
-            try:
-                self.window.write_event_value(self.key, s)
-            except Exception:
-                # If the window is closed or not available, silently ignore
-                pass
-
-        return len(s)
+        if data.strip():
+            self.callback(str(data))
+        return len(data)
 
     def flush(self):
-        return None
+        pass
 
 
-# ---------------------------------------------------------------------------
-# GUI Worker Thread
-# ---------------------------------------------------------------------------
-def run_pipeline_thread(window, folder_path):
-    """Runs the tagging pipeline in a thread."""
-    try:
-        run_auto_tag_pipeline(folder_path)
-        window.write_event_value("-DONE-", "✅ Tagging completed successfully.")
-    except Exception as e:
-        window.write_event_value("-ERROR-", str(e))
-
-
-# ---------------------------------------------------------------------------
-# GUI Layout
-# ---------------------------------------------------------------------------
-def main():
-    if sg is None:
-        # Friendly popup if PySimpleGUI isn't installed. Use tkinter if available
-        msg = (
-            "PySimpleGUI is not available. Please install it to run the GUI.\n\n"
-            "Run:\n    pip install PySimpleGUI\n\n"
-            "or:\n    pip install -r requirements.txt\n\n"
-            f"Original import error: {_PYSIMPLEGUI_IMPORT_ERROR}"
-        )
-        try:
-            import tkinter as _tk
-            from tkinter import messagebox as _mb
-
-            # Show a small error dialog and return without raising so imports stay safe
-            _root = _tk.Tk()
-            _root.withdraw()
-            _mb.showerror("Missing dependency: PySimpleGUI", msg)
-            try:
-                _root.destroy()
-            except Exception:
-                pass
-        except Exception:
-            # tkinter not available — print to stderr as a fallback
-            print(msg, file=sys.stderr)
-
-        return
-
-    getattr(sg, "theme")("DarkGrey13")
-
-    # Create a small factory that calls PySimpleGUI attributes via getattr at runtime.
-    # This avoids static analyzers reporting that PySimpleGUI doesn't expose these names.
-    def E(name, *a, **k):
-        return getattr(sg, name)(*a, **k)
-
-    layout = [
-        [E("Text", "🎵 Music Metadata Fixer", font=("Segoe UI", 16, "bold"))],
-        [E("Text", "Source Folder:"), E("Input", key="-SRC-", expand_x=True), E("FolderBrowse", "Browse")],
-        [E("Button", "Start", key="-START-", size=(10, 1), button_color=("white", "#007ACC")),
-         E("Button", "Exit", key="-EXIT-", size=(10, 1))],
-        [E("ProgressBar", 100, orientation="h", size=(40, 20), key="-PROG-", visible=False)],
-        [E("Multiline", size=(90, 20), key="-OUTPUT-", autoscroll=True, reroute_stdout=False,
-                      background_color="#1e1e1e", text_color="white", font=("Consolas", 9))],
-    ]
-
-    window = getattr(sg, "Window")("Metadata Fixer", layout, finalize=True, resizable=True)
-
-    # Save original streams so we can restore them on exit
-    _original_stdout = sys.stdout
-    _original_stderr = sys.stderr
-
-    # Redirect system output to the GUI (-LOG- event)
-    sys.stdout = StdoutRedirector(window, "-LOG-")
-    sys.stderr = StdoutRedirector(window, "-LOG-")
-
-    # ---------------------------------------------------------------------------
-    # Main Event Loop
-    # ---------------------------------------------------------------------------
-    try:
-        while True:
-            event, values = window.read()
-
-            if event in (getattr(sg, "WIN_CLOSED", sg), "-EXIT-"):
-                break
-
-            elif event == "-START-":
-                folder = values["-SRC-"].strip()
-                if not folder:
-                    getattr(sg, "popup_error")("Please select a source folder first.")
-                    continue
-
-                window["-OUTPUT-"].update("")
-                window["-PROG-"].update(0, visible=True)
-                window["-START-"].update(disabled=True)
-
-                threading.Thread(target=run_pipeline_thread, args=(window, folder), daemon=True).start()
-                print(f"🚀 Started tagging pipeline for: {folder}\n")
-
-            elif event == "-LOG-":
-                # Show logs incrementally
-                window["-OUTPUT-"].update(values["-LOG-"], append=True)
-
-            elif event == "-DONE-":
-                window["-OUTPUT-"].update(values["-DONE-"] + "\n", append=True)
-                window["-START-"].update(disabled=False)
-                window["-PROG-"].update(100)
-
-            elif event == "-ERROR-":
-                getattr(sg, "popup_error")(f"An error occurred:\n\n{values['-ERROR-']}")
-                window["-START-"].update(disabled=False)
-    finally:
-        # Restore original streams so further prints go to the console as expected
-        try:
-            sys.stdout = _original_stdout
-        except Exception:
-            pass
-        try:
-            sys.stderr = _original_stderr
-        except Exception:
-            pass
-        window.close()
-
-
+# -----------------------------------------------------------------------
+# App start
+# -----------------------------------------------------------------------
 if __name__ == "__main__":
-    main()
+    app = MetadataFixerApp()
+    app.mainloop()

@@ -6,6 +6,16 @@ from dotenv import load_dotenv
 import logging
 from core.tagger import run_tagger
 
+from pathlib import Path
+
+def find_mp3_files(root_folder):
+    """Find all MP3 files in the given folder and its subfolders."""
+    root_path = Path(root_folder)
+    if not root_path.exists():
+        raise ValueError(f"Folder not found: {root_folder}")
+    return [str(p) for p in root_path.rglob("*.mp3")]
+
+
 # ---------------------------------------------------------------------------
 # Logging setup
 # ---------------------------------------------------------------------------
