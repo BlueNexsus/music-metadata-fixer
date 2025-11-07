@@ -3,10 +3,10 @@ from tkinter import filedialog, messagebox
 import threading
 import sys
 import os
-from core.file_utils import run_auto_tag_pipeline
-import traceback
+from core.file_utils import run_auto_tag_pipeline, ensure_env_setup, find_mp3_files
 from core import tagger
-from core import file_utils
+import traceback
+
 
 
 # --- App settings ---
@@ -74,10 +74,20 @@ class MetadataFixerApp(ctk.CTk):
             messagebox.showerror("Error", "Please select a valid folder first.")
             return
 
+        # ✅ Make sure .env setup runs in main thread (prompts user if needed)
+        ensure_env_setup()
+
+        self.button_start.configure(state="disabled")
+        self.progress.set(0)
+        self.text_log.delete("1.0", "end")
+        self.log(f"🚀 Started tagging pipeline for: {folder}\n")
+
+        threading.Thread(target=self.run_pipeline_thread, args=(folder,), daemon=True).start()
+
         # --- Pre-check: see if all files are already tagged ---
         try:
             from core import tagger
-            mp3_files = file_utils.find_mp3_files(folder)
+            mp3_files = find_mp3_files(folder)
             if not mp3_files:
                 messagebox.showinfo("No MP3 Files", "No MP3 files were found in this folder.")
                 self.log("ℹ️ No MP3 files found in this folder.\n")
@@ -114,7 +124,11 @@ class MetadataFixerApp(ctk.CTk):
             # redirect stdout/stderr to GUI
             sys.stdout = sys.stderr = LogRedirector(gui_logger)
 
-            run_auto_tag_pipeline(folder)
+            def update_progress(done, total):
+                self.progress.set(done / total)
+                self.update_idletasks()
+
+            run_auto_tag_pipeline(folder, progress_callback=update_progress)
 
             self.progress.set(1)
             self.log("✅ Tagging completed successfully.\n")

@@ -1,0 +1,102 @@
+🧩 MetadataFixer – To-Do List (v2.1.0 → v2.2.0 Roadmap)
+🧠 Context
+
+The app is now stable with:
+
+CustomTkinter GUI ✅
+
+Working progress bar ✅
+
+Automatic AcoustID API key setup ✅
+
+Successful .exe build with version info ✅
+
+Remaining polish targets focus on UX refinement, design consistency, and background process handling.
+
+✅ 1. Simplify folder handling (remove duplication)
+
+Goal: Eliminate confusion between Music Folder (GUI) and ROOT_FOLDER (.env).
+
+Steps:
+
+In core/file_utils.py → ensure_env_setup()
+
+Remove any logic asking for or validating ROOT_FOLDER.
+
+Keep only API key prompt & save logic.
+
+In gui_metadata_fixer.py → browse_folder()
+
+After user selects a folder, add:
+
+from dotenv import set_key
+set_key(".env", "ROOT_FOLDER", folder)
+
+
+This ensures the chosen folder is auto-saved to .env for future runs.
+
+Result:
+First launch asks for API key once → future launches reuse last selected folder automatically.
+
+🧰 2. Silence the fpcalc.exe console window
+
+Goal: Stop the “split-second cmd window” from appearing during fingerprinting.
+
+Steps:
+
+In core/tagger.py, find where acoustid.match(api_key, path) is called.
+
+Wrap AcoustID’s subprocess calls with a hidden startupinfo:
+
+import subprocess
+startupinfo = subprocess.STARTUPINFO()
+startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+
+
+(We’ll integrate this into a helper so it applies globally.)
+
+Result:
+Fingerprinting runs silently in background without console flashes.
+
+🎨 3. GUI design improvements
+
+Ideas to explore:
+
+Add small footer label:
+"v2.1.0 • © BlueNexsus • github.com/BlueNexsus/music-metadata-fixer"
+
+Use consistent padding and alignment for a cleaner, modern look.
+
+Optionally add a dark “glass” background for the progress bar.
+
+Add a small icon to the window (bundled .ico file).
+
+📦 4. Packaging & usability
+
+Exclude .env from PyInstaller build permanently (--exclude-data or manual cleanup).
+
+After build, confirm:
+
+First run asks for API key only.
+
+Folder choice persists in .env.
+
+Progress bar still updates correctly.
+
+Update version_info.txt → v2.2.0 after changes.
+
+📘 5. Optional future upgrades
+
+Add cancel button to stop current tagging thread safely.
+
+Include an “About” popup with credits & GitHub link.
+
+Auto-detect existing .env and display a setup summary on launch.
+
+Explore lightweight async tagging for smoother GUI feedback.
+
+📅 Next build target
+
+Version: v2.2.0
+Milestone: UX refinement & background polish
+ETA: Tomorrow 😎

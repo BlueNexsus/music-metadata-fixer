@@ -108,17 +108,28 @@ def tag_file(path, api_key, logger):
         traceback.print_exc()
         return False
 
-def run_tagger(folder, api_key, logger):
-    """Run tagging on all MP3s inside given folder."""
+def run_tagger(folder, api_key, logger, progress_callback=None):
+    """Run tagging on all MP3s inside given folder, reporting progress if callback provided."""
     setup_musicbrainz()
     mp3_files = [p for p in Path(folder).rglob("*.mp3")]
     total = len(mp3_files)
     logger.info(f"Found {total} MP3 files in {folder}")
 
+    if total == 0:
+        return 0, 0
+
     success = 0
-    for f in tqdm(mp3_files, desc="Tagging", unit="file"):
+    for idx, f in enumerate(mp3_files, start=1):
         if tag_file(str(f), api_key, logger):
             success += 1
 
+        # ---- 🔄 Progress update ----
+        if progress_callback:
+            try:
+                progress_callback(idx, total)
+            except Exception:
+                pass  # avoid GUI crash if callback fails
+
     logger.info(f"Successfully tagged {success}/{total} files.")
     return success, total
+
