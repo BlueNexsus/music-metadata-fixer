@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual env
+.venv/
+
+# Build artifacts
+build/
+dist/
+*.spec
+
+# Logs
+logs/
+*.log
+
+# Local config/secrets
+.env
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Executables
+*.exe
