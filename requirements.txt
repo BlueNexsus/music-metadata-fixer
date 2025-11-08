@@ -1,11 +1,7 @@
+# MetadataFixer v2.2.1 – validated dependencies
 pyacoustid==1.2.2
 musicbrainzngs==0.7.1
 mutagen==1.45.1
 tqdm==4.65.0
 python-dotenv==1.0.0
-PySimpleGUI
-mutagen
-acoustid
-musicbrainzngs
-python-dotenv
-tqdm
+customtkinter==5.2.2
