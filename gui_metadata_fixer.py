@@ -50,12 +50,20 @@ class MetadataFixerApp(ctk.CTk):
 
         # --- Progress bar ---
         self.progress = ctk.CTkProgressBar(self, width=640)
-        self.progress.pack(pady=(10, 15))
+        self.progress.pack(pady=(10, 5))
         self.progress.set(0)
 
         # --- Log output ---
         self.text_log = ctk.CTkTextbox(self, width=660, height=260)
         self.text_log.pack(padx=20, pady=(0, 10))
+        # --- Footer ---
+        footer = ctk.CTkLabel(
+            self,
+            text="v2.2.0  •  © BlueNexsus  •  github.com/BlueNexsus/music-metadata-fixer",
+            font=("Segoe UI", 10),
+            text_color="gray"
+        )
+        footer.pack(side="bottom", pady=(0,6))
         self.log("✅ Ready to start.\n")
 
     # -----------------------------------------------------------------------
@@ -75,7 +83,7 @@ class MetadataFixerApp(ctk.CTk):
             return
 
         # ✅ Make sure .env setup runs in main thread (prompts user if needed)
-        ensure_env_setup()
+        ensure_env_setup(folder)
 
         self.button_start.configure(state="disabled")
         self.progress.set(0)
@@ -102,16 +110,9 @@ class MetadataFixerApp(ctk.CTk):
                 self.log(f"ℹ️ All {len(mp3_files)} MP3 files are already tagged. Skipping processing.\n")
                 return
         except Exception as e:
-            self.log(f"⚠️ Pre-check failed: {e}\n")
-
-        # --- Continue normally ---
-        self.button_start.configure(state="disabled")
-        self.progress.set(0)
-        self.text_log.delete("1.0", "end")
-        self.log(f"🚀 Started tagging pipeline for: {folder}\n")
-
-        threading.Thread(target=self.run_pipeline_thread, args=(folder,), daemon=True).start()
-
+            # Log the error quietly without popping up Windows dialog
+            self.log(f"⚠️ Non-fatal error during processing: {e}\n{traceback.format_exc()}\n")
+            print(f"[gui_metadata_fixer] Suppressed GUI popup for: {e}")
 
     def run_pipeline_thread(self, folder):
         """Run the tagging pipeline in a background thread."""
