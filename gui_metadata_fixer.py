@@ -83,7 +83,7 @@ class MetadataFixerApp(ctk.CTk):
             return
 
         # ✅ Make sure .env setup runs in main thread (prompts user if needed)
-        ensure_env_setup()
+        ensure_env_setup(folder)
 
         self.button_start.configure(state="disabled")
         self.progress.set(0)
@@ -110,16 +110,9 @@ class MetadataFixerApp(ctk.CTk):
                 self.log(f"ℹ️ All {len(mp3_files)} MP3 files are already tagged. Skipping processing.\n")
                 return
         except Exception as e:
-            self.log(f"⚠️ Pre-check failed: {e}\n")
-
-        # --- Continue normally ---
-        self.button_start.configure(state="disabled")
-        self.progress.set(0)
-        self.text_log.delete("1.0", "end")
-        self.log(f"🚀 Started tagging pipeline for: {folder}\n")
-
-        threading.Thread(target=self.run_pipeline_thread, args=(folder,), daemon=True).start()
-
+            # Log the error quietly without popping up Windows dialog
+            self.log(f"⚠️ Non-fatal error during processing: {e}\n{traceback.format_exc()}\n")
+            print(f"[gui_metadata_fixer] Suppressed GUI popup for: {e}")
 
     def run_pipeline_thread(self, folder):
         """Run the tagging pipeline in a background thread."""

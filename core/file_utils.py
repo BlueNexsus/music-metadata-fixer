@@ -9,21 +9,23 @@ import time, shutil, os
 
 from core.tagger import run_tagger
 
-
-def ensure_env_setup():
-    """Ensure that both ACOUSTID_API_KEY and ROOT_FOLDER exist in .env, prompting user if missing."""
-    from tkinter import simpledialog, Tk, messagebox, filedialog
+def ensure_env_setup(selected_folder=None):
+    """
+    Ensure that the ACOUSTID_API_KEY exists in .env.
+    If a folder is provided by GUI, save it as ROOT_FOLDER without prompting again.
+    """
+    from tkinter import simpledialog, Tk, messagebox
+    from dotenv import load_dotenv, set_key
 
     env_path = ".env"
     load_dotenv(dotenv_path=env_path)
 
     api_key = os.getenv("ACOUSTID_API_KEY")
-    root_folder = os.getenv("ROOT_FOLDER")
 
     root = Tk()
     root.withdraw()
 
-    # --- Step 1: Check API key ---
+    # --- Step 1: Check API key only ---
     if not api_key or api_key.strip().upper() in {"", "YOUR_ACOUSTID_APP_KEY_HERE"}:
         messagebox.showinfo(
             "AcoustID Setup",
@@ -39,24 +41,12 @@ def ensure_env_setup():
             root.destroy()
             raise ValueError("Missing API key")
 
-    # --- Step 2: Check Root folder ---
-    if not root_folder or not os.path.exists(root_folder):
-        messagebox.showinfo(
-            "Select Music Folder",
-            "Now choose your main folder that contains your music files."
-        )
-        selected_folder = filedialog.askdirectory(title="Select your music folder")
-        if selected_folder:
-            set_key(env_path, "ROOT_FOLDER", selected_folder)
-            root_folder = selected_folder
-            messagebox.showinfo("Saved", f"✅ Root folder saved:\n{selected_folder}")
-        else:
-            messagebox.showerror("Missing Folder", "❌ Cannot continue without selecting a music folder.")
-            root.destroy()
-            raise ValueError("Missing ROOT_FOLDER")
+    # --- Step 2: If GUI folder provided, save it ---
+    if selected_folder:
+        set_key(env_path, "ROOT_FOLDER", selected_folder)
 
     root.destroy()
-    return api_key, root_folder
+    return api_key
 
 
 
@@ -102,9 +92,11 @@ def check_fpcalc():
     os.environ["FPCALC"] = path
 
 def scan_for_untagged(source_folder):
-    """Find mp3s missing artist/title."""
+    """Find mp3s missing artist/title, excluding _temp_untagged folder."""
     untagged = []
     for p in Path(source_folder).rglob("*.mp3"):
+        if "_temp_untagged" in p.parts:
+            continue  # skip temp processing directory
         try:
             tags = EasyID3(p)
             if not ("artist" in tags and tags["artist"] and "title" in tags and tags["title"]):
@@ -112,6 +104,7 @@ def scan_for_untagged(source_folder):
         except Exception:
             untagged.append(p)
     return untagged
+
 
 def safe_move(src, dst, retries=5, delay=0.5):
     """Move files safely, retrying briefly if the source is still locked or delayed by the OS."""
@@ -121,11 +114,19 @@ def safe_move(src, dst, retries=5, delay=0.5):
             shutil.move(src, dst)
             return
         except FileNotFoundError:
-            # If the source truly disappeared, abort
             if not os.path.exists(src):
+                # Still raise if the file really disappeared
                 raise
             time.sleep(delay)
-    shutil.move(src, dst)
+        except Exception:
+            # Suppress transient Windows I/O errors until retries exhausted
+            time.sleep(delay)
+    try:
+        shutil.move(src, dst)
+    except Exception as e:
+        # Log but don’t crash GUI
+        print(f"[safe_move] Final move failed for {src}: {e}")
+
 
 
 def move_files(files, dest):
