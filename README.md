@@ -1,6 +1,7 @@
 # 🎵 Music Metadata Fixer
 
 [![GitHub release](https://img.shields.io/github/v/release/BlueNexsus/music-metadata-fixer?label=latest%20release&color=blue)](https://github.com/BlueNexsus/music-metadata-fixer/releases/latest)
+[![GitHub all releases](https://img.shields.io/github/downloads/BlueNexsus/music-metadata-fixer/total?color=brightgreen)](https://github.com/BlueNexsus/music-metadata-fixer/releases)
 
 **MetadataFixer** is a smart MP3 tag repair tool that automatically detects, identifies, and corrects missing or incorrect song metadata using **AcoustID** audio fingerprinting and **MusicBrainz** data.  
 It features a modern **GUI built with CustomTkinter** and can also run from the command line.
@@ -9,29 +10,30 @@ It features a modern **GUI built with CustomTkinter** and can also run from the 
 
 ## 🚀 Features
 
-- 🎧 Accurate audio fingerprinting via Chromaprint (`fpcalc`)
-- 🔍 Metadata lookup through AcoustID + MusicBrainz
-- 🪟 Modern GUI interface (CustomTkinter dark theme)
-- ⚙️ Automatic setup – prompts for missing API key on first run
-- 🗂️ Automatic folder handling – untagged songs moved to temp, tagged, then restored
-- 🧠 Smart filename fallback tagging
-- 📊 Real-time progress bar and logging
-- 🧾 `.exe` build available for Windows (no Python required)
+- 🎧 Accurate audio fingerprinting via **Chromaprint** (`fpcalc`)
+- 🔍 Metadata lookup through **AcoustID + MusicBrainz**
+- 🪟 Modern **CustomTkinter GUI** (dark theme)
+- ⚙️ Automatic setup — prompts for missing API key on first run
+- 🗂️ Smart folder handling — untagged songs are moved, tagged, and restored automatically
+- 🧠 Intelligent filename fallback tagging
+- 📊 Real-time progress bar and detailed logging
+- 🧾 **Windows EXE** build available (no Python required)
 
 ---
 
 ## 🧰 Requirements
 
-- **Python 3.11** or higher  
-- **fpcalc (Chromaprint)** — [download here](https://github.com/acoustid/chromaprint/releases)  
-  Place it next to the executable or in your PATH.  
-- **AcoustID API key** — get one for free at [acoustid.org/api-key](https://acoustid.org/api-key)
+- **Python 3.11** or newer  
+- **fpcalc (Chromaprint)** — [Download here](https://github.com/acoustid/chromaprint/releases)  
+  Place it next to the executable or add to PATH.  
+- **AcoustID API key** — get one free at [acoustid.org/api-key](https://acoustid.org/api-key)
 
-Supported format: `MP3` (FLAC and M4A coming soon)
+Supported format: **MP3**  
+(*FLAC and M4A support planned for future releases.*)
 
 ---
 
-## 🪟 GUI Usage (recommended)
+## 🪟 GUI Usage (Recommended)
 
 1. Launch:
    ```bash
@@ -42,24 +44,22 @@ Supported format: `MP3` (FLAC and M4A coming soon)
 2. On first run, the app will:
    - Ask for your **AcoustID API key**
    - Let you select your **music folder**
-   - Automatically save both to a `.env` file for next time
+   - Automatically save both to `.env` for next sessions
 
 3. Click **Start** to begin tagging  
-   - Untagged songs will be processed in the background  
-   - Progress is shown in real time  
-   - Once complete, files are restored to their original folder
+   - Untagged songs are processed in the background  
+   - Progress is shown live  
+   - Files are restored when tagging completes
 
 ---
 
-## 💻 CLI Usage (optional)
+## 💻 CLI Usage (Optional)
 
 Run the command-line version if you prefer automation:
-
 ```bash
 python fix_metadata.py --folder "D:\My Music"
 ```
-
-It will use the same `.env` configuration as the GUI version.
+It uses the same `.env` configuration as the GUI.
 
 ---
 
@@ -68,8 +68,8 @@ It will use the same `.env` configuration as the GUI version.
 ```
 music-metadata-fixer/
 ├─ core/
-│  ├─ tagger.py          # MusicBrainz/AcoustID tagging logic
-│  ├─ file_utils.py      # File movement, logging, and env setup
+│  ├─ tagger.py          # MusicBrainz / AcoustID tagging logic
+│  ├─ file_utils.py      # File movement, logging, and .env setup
 ├─ gui_metadata_fixer.py  # CustomTkinter GUI
 ├─ fix_metadata.py        # CLI entry point
 ├─ fpcalc.exe             # Chromaprint binary (Windows)
@@ -80,7 +80,7 @@ music-metadata-fixer/
 
 ---
 
-## 🧩 Environment Setup (for developers)
+## 🧩 Environment Setup (For Developers)
 
 ```bash
 git clone https://github.com/BlueNexsus/music-metadata-fixer.git
@@ -92,9 +92,9 @@ pip install -r requirements.txt
 
 ---
 
-## 🏗️ Building an EXE
+## 🏗️ Building the EXE
 
-Use **PyInstaller**:
+Build a single-file EXE using **PyInstaller**:
 ```bash
 pyinstaller --noconfirm --onefile --windowed ^
   --name "MetadataFixer" ^
@@ -105,25 +105,24 @@ pyinstaller --noconfirm --onefile --windowed ^
   gui_metadata_fixer.py
 ```
 
-Output will appear in the `dist/` folder as `MetadataFixer.exe`.
+Output will appear in `dist/MetadataFixer.exe`.
 
 ---
 
 ## 🗓️ Roadmap
 
-- [ ] Combine GUI folder selection with `.env` sync  
-- [ ] Silence `fpcalc.exe` console window  
 - [ ] Add “Cancel” button during tagging  
 - [ ] Add album art fetching  
-- [ ] Support FLAC, M4A formats  
+- [ ] Support FLAC and M4A formats  
 - [ ] Add “About” dialog with version info and GitHub link  
+- [ ] Implement async tagging for smoother UI  
 
 ---
 
 ## 📜 License
 
 MIT License  
-© 2025 BlueNexsus. All rights reserved.
+© 2025 BlueNexsus
 
 ---
 
