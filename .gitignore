@@ -15,6 +15,7 @@ dist/
 # Logs
 logs/
 *.log
+to-do.txt
 
 # Local config/secrets
 .env
