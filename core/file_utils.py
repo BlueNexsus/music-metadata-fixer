@@ -5,6 +5,7 @@ from pathlib import Path
 from tkinter import simpledialog, Tk, messagebox
 from dotenv import load_dotenv, set_key
 from mutagen.easyid3 import EasyID3
+import time, shutil, os
 
 from core.tagger import run_tagger
 
@@ -112,18 +113,33 @@ def scan_for_untagged(source_folder):
             untagged.append(p)
     return untagged
 
+def safe_move(src, dst, retries=5, delay=0.5):
+    """Move files safely, retrying briefly if the source is still locked or delayed by the OS."""
+    import time, shutil, os
+    for attempt in range(retries):
+        try:
+            shutil.move(src, dst)
+            return
+        except FileNotFoundError:
+            # If the source truly disappeared, abort
+            if not os.path.exists(src):
+                raise
+            time.sleep(delay)
+    shutil.move(src, dst)
+
+
 def move_files(files, dest):
     dest.mkdir(exist_ok=True)
     moved = []
     for f in files:
         target = dest / f.name
-        shutil.move(str(f), str(target))
+        safe_move(str(f), str(target))
         moved.append(target)
     return moved
 
 def move_back_all(src, dest):
     for f in Path(src).glob("*.mp3"):
-        shutil.move(str(f), str(Path(dest) / f.name))
+        safe_move(str(f), str(Path(dest) / f.name))
     try:
         Path(src).rmdir()
     except OSError:
