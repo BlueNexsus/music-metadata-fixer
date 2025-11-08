@@ -1,5 +1,8 @@
 # 🎵 Music Metadata Fixer
 
+[![GitHub release](https://img.shields.io/github/v/release/BlueNexsus/music-metadata-fixer?label=latest%20release&color=blue)](https://github.com/BlueNexsus/music-metadata-fixer/releases/latest)
+
+
 **MetadataFixer** is a smart MP3 tag repair tool that automatically detects, identifies, and corrects missing or incorrect song metadata using **AcoustID** audio fingerprinting and **MusicBrainz** data.  
 It features a modern **GUI built with CustomTkinter** and can also run from the command line.
 
