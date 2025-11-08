@@ -1,5 +1,6 @@
 import os
 import time
+import subprocess
 import logging
 import traceback
 import acoustid
@@ -44,6 +45,29 @@ def fallback_tag_from_filename(path, logger):
         return True
     return False
 
+def acoustid_match_silent(api_key, path):
+    """Wrapper around acoustid.match that hides fpcalc.exe console windows on Windows."""
+    import subprocess
+    startupinfo = None
+    creationflags = 0
+    if hasattr(subprocess, "STARTF_USESHOWWINDOW"):
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        creationflags = subprocess.CREATE_NO_WINDOW
+
+    old_popen = subprocess.Popen
+    def silent_popen(*args, **kwargs):
+        kwargs.setdefault("startupinfo", startupinfo)
+        kwargs.setdefault("creationflags", creationflags)
+        return old_popen(*args, **kwargs)
+
+    subprocess.Popen = silent_popen
+    try:
+        return acoustid.match(api_key, path)
+    finally:
+        subprocess.Popen = old_popen
+
+
 def tag_file(path, api_key, logger):
     """Tag a single MP3 file using AcoustID + MusicBrainz."""
     try:
@@ -53,7 +77,7 @@ def tag_file(path, api_key, logger):
 
         # fingerprint lookup
         try:
-            results = acoustid.match(api_key, path)
+            results = acoustid_match_silent(api_key, path)
         except Exception as e:
             logger.warning(f"Fingerprinting failed for {path}: {e}")
             time.sleep(1)
