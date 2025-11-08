@@ -50,12 +50,20 @@ class MetadataFixerApp(ctk.CTk):
 
         # --- Progress bar ---
         self.progress = ctk.CTkProgressBar(self, width=640)
-        self.progress.pack(pady=(10, 15))
+        self.progress.pack(pady=(10, 5))
         self.progress.set(0)
 
         # --- Log output ---
         self.text_log = ctk.CTkTextbox(self, width=660, height=260)
         self.text_log.pack(padx=20, pady=(0, 10))
+        # --- Footer ---
+        footer = ctk.CTkLabel(
+            self,
+            text="v2.2.0  •  © BlueNexsus  •  github.com/BlueNexsus/music-metadata-fixer",
+            font=("Segoe UI", 10),
+            text_color="gray"
+        )
+        footer.pack(side="bottom", pady=(0,6))
         self.log("✅ Ready to start.\n")
 
     # -----------------------------------------------------------------------
