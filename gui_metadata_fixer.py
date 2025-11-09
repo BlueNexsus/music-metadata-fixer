@@ -59,7 +59,7 @@ class MetadataFixerApp(ctk.CTk):
         # --- Footer ---
         footer = ctk.CTkLabel(
             self,
-            text="v2.2.0  •  © BlueNexsus  •  github.com/BlueNexsus/music-metadata-fixer",
+            text="v2.3.0  •  © BlueNexsus  •  github.com/BlueNexsus/music-metadata-fixer",
             font=("Segoe UI", 10),
             text_color="gray"
         )
@@ -71,10 +71,25 @@ class MetadataFixerApp(ctk.CTk):
     # -----------------------------------------------------------------------
     def browse_folder(self):
         folder = filedialog.askdirectory(title="Select your music folder")
-        if folder:
-            self.entry_path.delete(0, "end")
-            self.entry_path.insert(0, folder)
-            self.log(f"Selected folder: {folder}\n")
+        if not folder:
+            return
+
+        self.entry_path.delete(0, "end")
+        self.entry_path.insert(0, folder)
+
+        try:
+            mp3_files = find_mp3_files(folder)
+            count = len(mp3_files)
+            if count == 0:
+                messagebox.showinfo("No MP3 Files", "No MP3 files were found in this folder.")
+                self.log("ℹ️ No MP3 files found in this folder.\n")
+                self.button_start.configure(state="disabled")
+            else:
+                self.log(f"🎶 Found {count} MP3 files in this folder.\n")
+                self.button_start.configure(state="normal")
+        except Exception as e:
+            self.log(f"⚠️ Error scanning folder: {e}\n")
+
 
     def start_tagging(self):
         folder = self.entry_path.get().strip()
@@ -82,15 +97,21 @@ class MetadataFixerApp(ctk.CTk):
             messagebox.showerror("Error", "Please select a valid folder first.")
             return
 
-        # ✅ Make sure .env setup runs in main thread (prompts user if needed)
-        ensure_env_setup(folder)
+        # Ensure API key exists; if not, show wizard and stop here.
+        if not ensure_env_setup(folder):
+            self.log("ℹ️ Please complete the AcoustID setup wizard, then click Start again.\n")
+            return
 
         self.button_start.configure(state="disabled")
         self.progress.set(0)
         self.text_log.delete("1.0", "end")
         self.log(f"🚀 Started tagging pipeline for: {folder}\n")
 
-        threading.Thread(target=self.run_pipeline_thread, args=(folder,), daemon=True).start()
+        threading.Thread(
+            target=self.run_pipeline_thread,
+            args=(folder,),
+            daemon=True
+        ).start()
 
         # --- Pre-check: see if all files are already tagged ---
         try:
@@ -122,7 +143,6 @@ class MetadataFixerApp(ctk.CTk):
             def gui_logger(msg):
                 self.log(msg + "\n")
 
-            # redirect stdout/stderr to GUI
             sys.stdout = sys.stderr = LogRedirector(gui_logger)
 
             def update_progress(done, total):
@@ -142,6 +162,7 @@ class MetadataFixerApp(ctk.CTk):
             sys.stdout = old_stdout
             sys.stderr = old_stderr
             self.button_start.configure(state="normal")
+
 
     def log(self, msg):
         """Append text to the log box."""

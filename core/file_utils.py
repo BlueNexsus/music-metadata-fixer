@@ -2,52 +2,133 @@ import os
 import shutil
 import logging
 from pathlib import Path
-from tkinter import simpledialog, Tk, messagebox
+from tkinter import messagebox
 from dotenv import load_dotenv, set_key
 from mutagen.easyid3 import EasyID3
-import time, shutil, os
 
 from core.tagger import run_tagger
+
+# Global flag to prevent multiple wizards
+_wizard_open = False
+
 
 def ensure_env_setup(selected_folder=None):
     """
     Ensure that the ACOUSTID_API_KEY exists in .env.
-    If a folder is provided by GUI, save it as ROOT_FOLDER without prompting again.
+
+    Returns:
+        True  -> API key is present (after this call) and we can continue.
+        False -> No key yet (wizard shown or user cancelled); caller should STOP.
     """
-    from tkinter import simpledialog, Tk, messagebox
-    from dotenv import load_dotenv, set_key
+    import webbrowser
+    import customtkinter as ctk
+    global _wizard_open
 
     env_path = ".env"
     load_dotenv(dotenv_path=env_path)
-
     api_key = os.getenv("ACOUSTID_API_KEY")
 
-    root = Tk()
-    root.withdraw()
+    # If key already exists -> optionally store ROOT_FOLDER and we're done.
+    if api_key and api_key.strip().upper() not in {"", "YOUR_ACOUSTID_APP_KEY_HERE"}:
+        if selected_folder:
+            set_key(env_path, "ROOT_FOLDER", selected_folder)
+        return True
 
-    # --- Step 1: Check API key only ---
-    if not api_key or api_key.strip().upper() in {"", "YOUR_ACOUSTID_APP_KEY_HERE"}:
-        messagebox.showinfo(
-            "AcoustID Setup",
-            "You need an AcoustID API key to tag songs.\n\n"
-            "You can get one for free at https://acoustid.org/api-key."
+    # Prevent multiple wizard windows
+    if _wizard_open:
+        return False
+    _wizard_open = True
+
+    # ----------------- Setup Wizard -----------------
+    win = ctk.CTkToplevel()
+    win.title("AcoustID Setup Wizard")
+    win.geometry("480x280")
+    win.resizable(False, False)
+
+    title = ctk.CTkLabel(
+        win,
+        text="🎧 AcoustID API Key Required",
+        font=("Segoe UI", 18, "bold")
+    )
+    title.pack(pady=(20, 10))
+
+    text = (
+        "To use automatic song recognition, you need a free API key from AcoustID.\n\n"
+        "1. Open AcoustID’s website.\n"
+        "2. Click \"Register a new application\".\n"
+        "3. Copy the generated API Key.\n"
+        "4. Paste it below and click Save."
+    )
+
+    label = ctk.CTkLabel(
+        win,
+        text=text,
+        font=("Segoe UI", 12),
+        justify="left",
+        wraplength=420
+    )
+    label.pack(pady=(0, 10), padx=15)
+
+    def open_site():
+        webbrowser.open("https://acoustid.org")
+
+    ctk.CTkButton(
+        win,
+        text="🌐 Open AcoustID Website",
+        command=open_site,
+        width=220
+    ).pack(pady=(5, 10))
+
+    entry = ctk.CTkEntry(
+        win,
+        width=360,
+        placeholder_text="Paste your API key here"
+    )
+    entry.pack(pady=(5, 10))
+
+    btn_frame = ctk.CTkFrame(win, fg_color="transparent")
+    btn_frame.pack(pady=(10, 5))
+
+    def save_key():
+        global _wizard_open
+        key = entry.get().strip()
+        if not key:
+            messagebox.showerror("Error", "API key cannot be empty.")
+            return
+        set_key(env_path, "ACOUSTID_API_KEY", key)
+        os.environ["ACOUSTID_API_KEY"] = key  # make it visible immediately
+        if selected_folder:
+            set_key(env_path, "ROOT_FOLDER", selected_folder)
+        messagebox.showinfo("Saved", "✅ API key saved successfully!")
+        _wizard_open = False
+        win.destroy()
+
+    def cancel():
+        global _wizard_open
+        messagebox.showerror(
+            "Missing Key",
+            "❌ Cannot start tagging without an AcoustID API key.\n"
+            "Please obtain a key and try again."
         )
-        api_key = simpledialog.askstring("Enter API Key", "Please enter your AcoustID API key:")
-        if api_key:
-            set_key(env_path, "ACOUSTID_API_KEY", api_key)
-            messagebox.showinfo("Saved", "✅ API key saved successfully!")
-        else:
-            messagebox.showerror("Missing Key", "❌ Cannot continue without an API key.")
-            root.destroy()
-            raise ValueError("Missing API key")
+        _wizard_open = False
+        win.destroy()
 
-    # --- Step 2: If GUI folder provided, save it ---
-    if selected_folder:
-        set_key(env_path, "ROOT_FOLDER", selected_folder)
+    ctk.CTkButton(
+        btn_frame, text="Save", width=100, command=save_key
+    ).pack(side="left", padx=10)
+    ctk.CTkButton(
+        btn_frame, text="Cancel", width=100, command=cancel
+    ).pack(side="left", padx=10)
 
-    root.destroy()
-    return api_key
+    # Bring wizard to front, but not permanently topmost
+    win.lift()
+    win.attributes("-topmost", True)
+    win.after(150, lambda: win.attributes("-topmost", False))
+    win.after(100, win.focus_force)
 
+    print("[MetadataFixer] API key missing – showing AcoustID setup wizard.")
+    # IMPORTANT: we do NOT block here; user will press Start again after saving.
+    return False
 
 
 def find_mp3_files(root_folder):
@@ -75,10 +156,10 @@ def setup_logger():
     )
     return logging.getLogger("MetadataFixer")
 
+
 # ---------------------------------------------------------------------------
 # Utilities
 # ---------------------------------------------------------------------------
-
 def check_fpcalc():
     fpcalc = "fpcalc.exe" if os.name == "nt" else "fpcalc"
     here = Path(__file__).resolve().parent.parent
@@ -91,15 +172,19 @@ def check_fpcalc():
         raise FileNotFoundError("fpcalc.exe not found. Place it in the project folder.")
     os.environ["FPCALC"] = path
 
+
 def scan_for_untagged(source_folder):
     """Find mp3s missing artist/title, excluding _temp_untagged folder."""
     untagged = []
     for p in Path(source_folder).rglob("*.mp3"):
         if "_temp_untagged" in p.parts:
-            continue  # skip temp processing directory
+            continue
         try:
             tags = EasyID3(p)
-            if not ("artist" in tags and tags["artist"] and "title" in tags and tags["title"]):
+            if not (
+                "artist" in tags and tags["artist"]
+                and "title" in tags and tags["title"]
+            ):
                 untagged.append(p)
         except Exception:
             untagged.append(p)
@@ -107,26 +192,22 @@ def scan_for_untagged(source_folder):
 
 
 def safe_move(src, dst, retries=5, delay=0.5):
-    """Move files safely, retrying briefly if the source is still locked or delayed by the OS."""
-    import time, shutil, os
+    """Move files safely, retrying briefly if the source is still locked."""
+    import time
     for attempt in range(retries):
         try:
             shutil.move(src, dst)
             return
         except FileNotFoundError:
             if not os.path.exists(src):
-                # Still raise if the file really disappeared
                 raise
             time.sleep(delay)
         except Exception:
-            # Suppress transient Windows I/O errors until retries exhausted
             time.sleep(delay)
     try:
         shutil.move(src, dst)
     except Exception as e:
-        # Log but don’t crash GUI
         print(f"[safe_move] Final move failed for {src}: {e}")
-
 
 
 def move_files(files, dest):
@@ -138,30 +219,34 @@ def move_files(files, dest):
         moved.append(target)
     return moved
 
+
 def move_back_all(src, dest):
     for f in Path(src).glob("*.mp3"):
         safe_move(str(f), str(Path(dest) / f.name))
     try:
         Path(src).rmdir()
     except OSError:
-        pass  # folder not empty or in use
+        pass
+
 
 # ---------------------------------------------------------------------------
 # Main automatic pipeline
 # ---------------------------------------------------------------------------
-
 def run_auto_tag_pipeline(source_folder=None, progress_callback=None):
     """Automatically handle move-to-temp, tag, and move-back."""
     load_dotenv()
     api_key = os.getenv("ACOUSTID_API_KEY")
 
+    # Defensive: in normal flow this should already be set by ensure_env_setup
     if not api_key:
-        raise ValueError("ACOUSTID_API_KEY not set in .env")
+        print("[MetadataFixer] ACOUSTID_API_KEY missing at pipeline start; aborting.")
+        return
 
     if not source_folder:
         source_folder = os.getenv("ROOT_FOLDER")
         if not source_folder or not os.path.exists(source_folder):
-            raise ValueError("ROOT_FOLDER not set or does not exist.")
+            print("[MetadataFixer] Invalid or missing ROOT_FOLDER; stopping pipeline.")
+            return
 
     check_fpcalc()
     logger = setup_logger()
@@ -175,18 +260,16 @@ def run_auto_tag_pipeline(source_folder=None, progress_callback=None):
     if not untagged:
         logger.info("No untagged songs found. Everything is up-to-date.")
         if progress_callback:
-            progress_callback(1, 1)  # show full progress instantly
+            progress_callback(1, 1)
         return
 
     logger.info(f"Found {len(untagged)} untagged files. Moving to {temp_folder}")
     move_files(untagged, temp_folder)
 
-    # --- Pass the progress callback into run_tagger() ---
+    # Run tagger
     success, total = run_tagger(temp_folder, api_key, logger, progress_callback)
 
     move_back_all(temp_folder, source_folder)
     logger.info(f"Moved all files back to {source_folder}")
     logger.info("Auto tagging pipeline completed.")
     logger.info(f"Summary: {success}/{total} tagged successfully.")
-
-
